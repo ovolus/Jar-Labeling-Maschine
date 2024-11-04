@@ -1,0 +1,103 @@
+import time
+import serial
+import RPi.GPIO as GPIO
+
+# GPIO pins configuration (assuming same pins as before)
+LIGHT_SENSOR_PIN = 18
+GRIPPER_PIN = 23
+ACTUATOR_UP_PIN = 24
+ACTUATOR_DOWN_PIN = 25
+STEPPER_DIR_PIN = 26
+STEPPER_STEP_PIN = 27
+
+# Set up GPIO pins
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LIGHT_SENSOR_PIN, GPIO.IN)
+GPIO.setup(GRIPPER_PIN, GPIO.OUT)
+GPIO.setup(ACTUATOR_UP_PIN, GPIO.OUT)
+GPIO.setup(ACTUATOR_DOWN_PIN, GPIO.OUT)
+GPIO.setup(STEPPER_DIR_PIN, GPIO.OUT)
+GPIO.setup(STEPPER_STEP_PIN, GPIO.OUT)
+
+# INTREX communication setup
+intrex = serial.Serial('/dev/ttyUSB0', baudrate=19200, timeout=1)
+
+# Function to send command to INTREX
+def send_intrex_command(command):
+    print(f"Sending command to INTREX: {command}")
+    intrex.write(command.encode())
+
+# Function to control conveyor
+def control_conveyor(state):
+    if state == 'start':
+        print("Conveyor starting...")
+        # Code to start conveyor
+    elif state == 'stop':
+        print("Conveyor stopping...")
+        # Code to stop conveyor
+
+# Gripper control function
+def control_gripper(state):
+    if state == 'grip':
+        print("Gripping jar...")
+        GPIO.output(GRIPPER_PIN, GPIO.HIGH)
+    elif state == 'release':
+        print("Releasing jar...")
+        GPIO.output(GRIPPER_PIN, GPIO.LOW)
+
+# Linear actuator control function
+def control_actuator(direction):
+    if direction == 'up':
+        print("Actuator moving up...")
+        GPIO.output(ACTUATOR_UP_PIN, GPIO.HIGH)
+        GPIO.output(ACTUATOR_DOWN_PIN, GPIO.LOW)
+    elif direction == 'down':
+        print("Actuator moving down...")
+        GPIO.output(ACTUATOR_UP_PIN, GPIO.LOW)
+        GPIO.output(ACTUATOR_DOWN_PIN, GPIO.HIGH)
+
+# Function to rotate jar in sync with INTREX extrusion
+def rotate_jar(sync_speed):
+    print(f"Rotating jar at sync speed: {sync_speed}")
+    GPIO.output(STEPPER_DIR_PIN, GPIO.HIGH)
+    for _ in range(100):  # Adjust loop for label time
+        GPIO.output(STEPPER_STEP_PIN, GPIO.HIGH)
+        time.sleep(sync_speed)  # Sync with extrusion speed
+        GPIO.output(STEPPER_STEP_PIN, GPIO.LOW)
+        time.sleep(sync_speed)
+
+# Main process function
+def labeling_process():
+    try:
+        while True:
+            # Wait for light sensor to detect a jar
+            if GPIO.input(LIGHT_SENSOR_PIN) == GPIO.HIGH:
+                control_conveyor('stop')
+                control_gripper('grip')
+                
+                # Move actuator up with jar to labeling position
+                control_actuator('up')
+                time.sleep(1)  # Adjust time for actuator speed
+
+                # Start label application on INTREX
+                send_intrex_command("START_LABEL")  # Placeholder command
+                
+                # Rotate jar in sync with extrusion
+                rotate_jar(sync_speed=0.01)
+                
+                # Stop label application
+                send_intrex_command("STOP_LABEL")
+                
+                # Move actuator down and release jar
+                control_actuator('down')
+                time.sleep(1)  # Adjust time for actuator speed
+                control_gripper('release')
+                
+                # Restart conveyor for the next jar
+                control_conveyor('start')
+                time.sleep(2)  # Delay for next jar arrival
+    except KeyboardInterrupt:
+        GPIO.cleanup()
+
+# Run the labeling process
+labeling_process()
