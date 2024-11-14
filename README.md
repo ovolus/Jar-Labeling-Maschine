@@ -74,6 +74,15 @@ The Arduino code interprets commands from the Raspberry Pi and manages motor con
 2. **User Interface**: Add buttons to start, stop, and manually calibrate the process.
 3. **Data Logging**: Record operational data for maintenance and analysis.
 
+Explanation of Key Additions:
+
+    Enable/Disable All Stepper Drivers: ENABLE_PIN is used to activate/deactivate all stepper drivers with enableDrivers() and disableDrivers().
+    Process Flow Adjustments:
+        A new step is added to lower, grip, lift, rotate, and release the jar.
+        Calibration Factors (calibrationFactorHeight and calibrationFactorRotation) can be adjusted to fine-tune the speed and positioning.
+
+This code will control the labeling process with each part of the sequence enabled by the stepper motors, and the power usage optimized by disabling drivers when not needed.
+
 ## License
 
 This project is open-source and available for modification. Please acknowledge the project’s contributors if republished.
