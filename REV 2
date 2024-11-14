@@ -1,0 +1,86 @@
+import time
+import RPi.GPIO as GPIO
+
+# GPIO pin definitions
+OPTICAL_SENSOR_PIN = 18           # Optical sensor for jar detection
+GRIPPER_PIN = 23                  # Gripper control
+LINEAR_MOTOR_DIR_PIN = 24         # Direction pin for linear motion (up/down)
+LINEAR_MOTOR_STEP_PIN = 25        # Step pin for linear motion
+ROTATION_MOTOR_DIR_PIN = 26       # Direction pin for rotation motor
+ROTATION_MOTOR_STEP_PIN = 27      # Step pin for rotation motor
+INTREX_TRIGGER_PIN = 28           # Pin to trigger the INTREX labeling machine
+
+# Setup GPIO pins
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(OPTICAL_SENSOR_PIN, GPIO.IN)
+GPIO.setup(GRIPPER_PIN, GPIO.OUT)
+GPIO.setup(LINEAR_MOTOR_DIR_PIN, GPIO.OUT)
+GPIO.setup(LINEAR_MOTOR_STEP_PIN, GPIO.OUT)
+GPIO.setup(ROTATION_MOTOR_DIR_PIN, GPIO.OUT)
+GPIO.setup(ROTATION_MOTOR_STEP_PIN, GPIO.OUT)
+GPIO.setup(INTREX_TRIGGER_PIN, GPIO.OUT)
+
+def move_linear_motor(steps, direction):
+    """
+    Moves the linear stepper motor a specified number of steps in a given direction.
+    direction: True for up, False for down
+    steps: Number of steps to move
+    """
+    GPIO.output(LINEAR_MOTOR_DIR_PIN, direction)  # Set direction
+    for _ in range(steps):
+        GPIO.output(LINEAR_MOTOR_STEP_PIN, GPIO.HIGH)
+        time.sleep(0.002)  # Adjust for speed control
+        GPIO.output(LINEAR_MOTOR_STEP_PIN, GPIO.LOW)
+        time.sleep(0.002)
+
+def rotate_jar(steps):
+    """
+    Rotates the jar stepper motor a specific number of steps.
+    """
+    GPIO.output(ROTATION_MOTOR_DIR_PIN, GPIO.HIGH)  # Set rotation direction
+    for _ in range(steps):
+        GPIO.output(ROTATION_MOTOR_STEP_PIN, GPIO.HIGH)
+        time.sleep(0.01)  # Adjust rotation speed
+        GPIO.output(ROTATION_MOTOR_STEP_PIN, GPIO.LOW)
+        time.sleep(0.01)
+
+def start_labeling_process():
+    """
+    Starts the entire labeling sequence when a jar is detected.
+    """
+    # Wait for jar detection
+    while not GPIO.input(OPTICAL_SENSOR_PIN):
+        time.sleep(0.1)
+
+    # 1. Move linear motor down to jar level
+    move_linear_motor(200, direction=False)  # Lower motor (down)
+
+    # 2. Activate gripper to hold jar
+    GPIO.output(GRIPPER_PIN, GPIO.HIGH)
+    time.sleep(0.5)  
+
+    # 3. Lift jar to labeling height
+    move_linear_motor(400, direction=True)  # Raise motor (up)
+
+    # 4. Trigger INTREX labeling machine
+    GPIO.output(INTREX_TRIGGER_PIN, GPIO.HIGH)
+    time.sleep(0.2)  # Pulse to trigger labeling
+    GPIO.output(INTREX_TRIGGER_PIN, GPIO.LOW)
+
+    # 5. Rotate jar in sync with INTREX output speed
+    rotate_jar(100)  # Adjust steps to match rotation speed to labeling
+
+    # 6. Lower jar back down after labeling
+    move_linear_motor(400, direction=False)  # Lower motor (down)
+
+    # 7. Release gripper
+    GPIO.output(GRIPPER_PIN, GPIO.LOW)
+    time.sleep(0.5)
+
+try:
+    # Loop to continuously check for jars and start labeling
+    while True:
+        start_labeling_process()
+
+except KeyboardInterrupt:
+    GPIO.cleanup()
