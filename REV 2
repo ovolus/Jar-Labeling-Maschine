@@ -1,86 +1,94 @@
-import time
-import RPi.GPIO as GPIO
+// Pin definitions
+#define ENABLE_PIN 8               // Enable pin for all stepper drivers
+#define LIGHT_SENSOR_PIN 2         // Light sensor to detect jar readiness
+#define GRIPPER_PIN 7              // Gripper control pin
+#define LINEAR_MOTOR_DIR_PIN 24    // Direction pin for linear stepper motor
+#define LINEAR_MOTOR_STEP_PIN 25   // Step pin for linear stepper motor
+#define ROTATION_MOTOR_DIR_PIN 26  // Direction pin for rotation stepper motor
+#define ROTATION_MOTOR_STEP_PIN 27 // Step pin for rotation stepper motor
+#define INTREX_TRIGGER_PIN 3       // Trigger for the INTREX labeling machine
 
-# GPIO pin definitions
-OPTICAL_SENSOR_PIN = 18           # Optical sensor for jar detection
-GRIPPER_PIN = 23                  # Gripper control
-LINEAR_MOTOR_DIR_PIN = 24         # Direction pin for linear motion (up/down)
-LINEAR_MOTOR_STEP_PIN = 25        # Step pin for linear motion
-ROTATION_MOTOR_DIR_PIN = 26       # Direction pin for rotation motor
-ROTATION_MOTOR_STEP_PIN = 27      # Step pin for rotation motor
-INTREX_TRIGGER_PIN = 28           # Pin to trigger the INTREX labeling machine
+// Variables for timing and control
+int calibrationFactorHeight = 1;   // Calibration for vertical movement
+int calibrationFactorRotation = 1; // Calibration for rotation speed
 
-# Setup GPIO pins
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(OPTICAL_SENSOR_PIN, GPIO.IN)
-GPIO.setup(GRIPPER_PIN, GPIO.OUT)
-GPIO.setup(LINEAR_MOTOR_DIR_PIN, GPIO.OUT)
-GPIO.setup(LINEAR_MOTOR_STEP_PIN, GPIO.OUT)
-GPIO.setup(ROTATION_MOTOR_DIR_PIN, GPIO.OUT)
-GPIO.setup(ROTATION_MOTOR_STEP_PIN, GPIO.OUT)
-GPIO.setup(INTREX_TRIGGER_PIN, GPIO.OUT)
+void setup() {
+  // Pin setups
+  pinMode(ENABLE_PIN, OUTPUT);
+  digitalWrite(ENABLE_PIN, HIGH);  // Disable all drivers initially
+  
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(GRIPPER_PIN, OUTPUT);
+  pinMode(LINEAR_MOTOR_DIR_PIN, OUTPUT);
+  pinMode(LINEAR_MOTOR_STEP_PIN, OUTPUT);
+  pinMode(ROTATION_MOTOR_DIR_PIN, OUTPUT);
+  pinMode(ROTATION_MOTOR_STEP_PIN, OUTPUT);
+  pinMode(INTREX_TRIGGER_PIN, OUTPUT);
+  
+  Serial.begin(9600); // Initialize serial communication if needed
+}
 
-def move_linear_motor(steps, direction):
-    """
-    Moves the linear stepper motor a specified number of steps in a given direction.
-    direction: True for up, False for down
-    steps: Number of steps to move
-    """
-    GPIO.output(LINEAR_MOTOR_DIR_PIN, direction)  # Set direction
-    for _ in range(steps):
-        GPIO.output(LINEAR_MOTOR_STEP_PIN, GPIO.HIGH)
-        time.sleep(0.002)  # Adjust for speed control
-        GPIO.output(LINEAR_MOTOR_STEP_PIN, GPIO.LOW)
-        time.sleep(0.002)
+// Functions to enable/disable all drivers
+void enableDrivers() {
+  digitalWrite(ENABLE_PIN, LOW); // Enable all drivers
+}
 
-def rotate_jar(steps):
-    """
-    Rotates the jar stepper motor a specific number of steps.
-    """
-    GPIO.output(ROTATION_MOTOR_DIR_PIN, GPIO.HIGH)  # Set rotation direction
-    for _ in range(steps):
-        GPIO.output(ROTATION_MOTOR_STEP_PIN, GPIO.HIGH)
-        time.sleep(0.01)  # Adjust rotation speed
-        GPIO.output(ROTATION_MOTOR_STEP_PIN, GPIO.LOW)
-        time.sleep(0.01)
+void disableDrivers() {
+  digitalWrite(ENABLE_PIN, HIGH); // Disable all drivers
+}
 
-def start_labeling_process():
-    """
-    Starts the entire labeling sequence when a jar is detected.
-    """
-    # Wait for jar detection
-    while not GPIO.input(OPTICAL_SENSOR_PIN):
-        time.sleep(0.1)
+void loop() {
+  // Check if a jar is ready using the light sensor
+  if (digitalRead(LIGHT_SENSOR_PIN) == HIGH) {
+    enableDrivers(); // Enable drivers to start the process
+    
+    // Step 1: Lower the gripper to the jar level
+    digitalWrite(LINEAR_MOTOR_DIR_PIN, LOW);
+    for (int i = 0; i < 200 * calibrationFactorHeight; i++) {
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, HIGH);
+      delayMicroseconds(500); // Control speed of lowering
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, LOW);
+      delayMicroseconds(500);
+    }
+    
+    // Step 2: Grip the jar
+    digitalWrite(GRIPPER_PIN, HIGH); // Activate gripper to hold jar
+    delay(500);                      // Wait for the gripper to secure the jar
+    
+    // Step 3: Lift the jar to the labeling position
+    digitalWrite(LINEAR_MOTOR_DIR_PIN, HIGH); // Set direction to lift
+    for (int i = 0; i < 200 * calibrationFactorHeight; i++) {
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, LOW);
+      delayMicroseconds(500);
+    }
 
-    # 1. Move linear motor down to jar level
-    move_linear_motor(200, direction=False)  # Lower motor (down)
+    // Step 4: Trigger the INTREX labeling machine
+    digitalWrite(INTREX_TRIGGER_PIN, HIGH); // Trigger label application
+    delay(100);                             // Short delay for trigger
+    digitalWrite(INTREX_TRIGGER_PIN, LOW);
 
-    # 2. Activate gripper to hold jar
-    GPIO.output(GRIPPER_PIN, GPIO.HIGH)
-    time.sleep(0.5)  
+    // Step 5: Rotate jar in sync with label application
+    digitalWrite(ROTATION_MOTOR_DIR_PIN, HIGH); // Set rotation direction
+    for (int i = 0; i < 400 * calibrationFactorRotation; i++) {
+      digitalWrite(ROTATION_MOTOR_STEP_PIN, HIGH);
+      delayMicroseconds(300); // Adjust to sync rotation speed with labeling
+      digitalWrite(ROTATION_MOTOR_STEP_PIN, LOW);
+      delayMicroseconds(300);
+    }
 
-    # 3. Lift jar to labeling height
-    move_linear_motor(400, direction=True)  # Raise motor (up)
-
-    # 4. Trigger INTREX labeling machine
-    GPIO.output(INTREX_TRIGGER_PIN, GPIO.HIGH)
-    time.sleep(0.2)  # Pulse to trigger labeling
-    GPIO.output(INTREX_TRIGGER_PIN, GPIO.LOW)
-
-    # 5. Rotate jar in sync with INTREX output speed
-    rotate_jar(100)  # Adjust steps to match rotation speed to labeling
-
-    # 6. Lower jar back down after labeling
-    move_linear_motor(400, direction=False)  # Lower motor (down)
-
-    # 7. Release gripper
-    GPIO.output(GRIPPER_PIN, GPIO.LOW)
-    time.sleep(0.5)
-
-try:
-    # Loop to continuously check for jars and start labeling
-    while True:
-        start_labeling_process()
-
-except KeyboardInterrupt:
-    GPIO.cleanup()
+    // Step 6: Lower the jar back to its initial position
+    digitalWrite(LINEAR_MOTOR_DIR_PIN, LOW); // Direction for lowering
+    for (int i = 0; i < 200 * calibrationFactorHeight; i++) {
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(LINEAR_MOTOR_STEP_PIN, LOW);
+      delayMicroseconds(500);
+    }
+    
+    // Step 7: Release the gripper and disable drivers
+    digitalWrite(GRIPPER_PIN, LOW); // Release jar
+    disableDrivers();               // Disable all drivers to save power
+  }
+}
