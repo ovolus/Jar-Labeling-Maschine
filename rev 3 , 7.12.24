@@ -60,11 +60,13 @@ void checkEmergencyOff() {
 // Function to operate pneumatic gripper
 void controlGripper(bool open) {
   if (open) {
-    digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW);
-    digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH);
+    digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW); // Ensure close relay is OFF
+    delay(50); // Small delay to prevent overlap
+    digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH); // Activate open relay
   } else {
-    digitalWrite(RELAY_VALVE_OPEN_PIN, LOW);
-    digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH);
+    digitalWrite(RELAY_VALVE_OPEN_PIN, LOW); // Ensure open relay is OFF
+    delay(50); // Small delay to prevent overlap
+    digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH); // Activate close relay
   }
 }
 
