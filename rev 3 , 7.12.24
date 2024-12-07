@@ -1,0 +1,132 @@
+// Pin Definitions
+#define RELAY_ROTATION_STEPPER_PIN 2  // Power for rotation stepper
+#define RELAY_LINEAR_STEPPER_PIN 3   // Power for linear stepper
+#define RELAY_VALVE_CLOSE_PIN 4      // Close pneumatic gripper
+#define RELAY_VALVE_OPEN_PIN 5       // Open pneumatic gripper
+#define STEP_PIN_ROTATION 6          // Rotation Stepper Step Pin
+#define DIR_PIN_ROTATION 7           // Rotation Stepper Direction Pin
+#define STEP_PIN_LINEAR 8            // Linear Stepper Step Pin
+#define DIR_PIN_LINEAR 9             // Linear Stepper Direction Pin
+#define EMERGENCY_OFF_PIN 10         // Emergency Off trigger
+#define LIGHT_SENSOR_PIN 11          // Input from light sensor
+#define INTREX_TRIGGER_PIN 12        // Output to trigger INTREX machine
+
+// Variables
+bool emergencyOff = false;
+
+// Setup function
+void setup() {
+  // Initialize pins
+  pinMode(RELAY_ROTATION_STEPPER_PIN, OUTPUT);
+  pinMode(RELAY_LINEAR_STEPPER_PIN, OUTPUT);
+  pinMode(RELAY_VALVE_CLOSE_PIN, OUTPUT);
+  pinMode(RELAY_VALVE_OPEN_PIN, OUTPUT);
+  pinMode(STEP_PIN_ROTATION, OUTPUT);
+  pinMode(DIR_PIN_ROTATION, OUTPUT);
+  pinMode(STEP_PIN_LINEAR, OUTPUT);
+  pinMode(DIR_PIN_LINEAR, OUTPUT);
+  pinMode(EMERGENCY_OFF_PIN, INPUT_PULLUP); // Emergency off is active LOW
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(INTREX_TRIGGER_PIN, OUTPUT);
+
+  // Start relays in OFF state
+  digitalWrite(RELAY_ROTATION_STEPPER_PIN, LOW);
+  digitalWrite(RELAY_LINEAR_STEPPER_PIN, LOW);
+  digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW);
+  digitalWrite(RELAY_VALVE_OPEN_PIN, LOW);
+
+  // INTREX trigger off
+  digitalWrite(INTREX_TRIGGER_PIN, LOW);
+}
+
+// Function to check emergency off
+void checkEmergencyOff() {
+  if (digitalRead(EMERGENCY_OFF_PIN) == LOW) {
+    emergencyOff = true;
+    // Turn off all relays immediately
+    digitalWrite(RELAY_ROTATION_STEPPER_PIN, LOW);
+    digitalWrite(RELAY_LINEAR_STEPPER_PIN, LOW);
+    digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW);
+    digitalWrite(RELAY_VALVE_OPEN_PIN, LOW);
+    digitalWrite(INTREX_TRIGGER_PIN, LOW);
+    while (digitalRead(EMERGENCY_OFF_PIN) == LOW) {
+      // Stay in emergency mode until button is released
+      delay(100);
+    }
+    emergencyOff = false;
+  }
+}
+
+// Function to operate pneumatic gripper
+void controlGripper(bool open) {
+  if (open) {
+    digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW);
+    digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH);
+  } else {
+    digitalWrite(RELAY_VALVE_OPEN_PIN, LOW);
+    digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH);
+  }
+}
+
+// Function to move linear stepper motor
+void moveLinearStepper(bool up, int steps, int speed) {
+  digitalWrite(DIR_PIN_LINEAR, up ? HIGH : LOW);
+  for (int i = 0; i < steps; i++) {
+    digitalWrite(STEP_PIN_LINEAR, HIGH);
+    delayMicroseconds(speed);
+    digitalWrite(STEP_PIN_LINEAR, LOW);
+    delayMicroseconds(speed);
+    checkEmergencyOff();
+  }
+}
+
+// Function to rotate the jar
+void rotateJar(int steps, int speed) {
+  digitalWrite(DIR_PIN_ROTATION, HIGH); // Set rotation direction
+  for (int i = 0; i < steps; i++) {
+    digitalWrite(STEP_PIN_ROTATION, HIGH);
+    delayMicroseconds(speed);
+    digitalWrite(STEP_PIN_ROTATION, LOW);
+    delayMicroseconds(speed);
+    checkEmergencyOff();
+  }
+}
+
+// Main loop
+void loop() {
+  checkEmergencyOff();
+  if (emergencyOff) return;
+
+  if (digitalRead(LIGHT_SENSOR_PIN) == HIGH) { // Jar detected
+    // Turn on relays for steppers
+    digitalWrite(RELAY_ROTATION_STEPPER_PIN, HIGH);
+    digitalWrite(RELAY_LINEAR_STEPPER_PIN, HIGH);
+
+    // Lower linear stepper to jar level
+    moveLinearStepper(false, 1000, 800); // Adjust steps and speed as needed
+
+    // Close gripper to hold the jar
+    controlGripper(false);
+
+    // Lift the jar to labeling height
+    moveLinearStepper(true, 1000, 800);
+
+    // Trigger INTREX
+    digitalWrite(INTREX_TRIGGER_PIN, HIGH);
+    delay(500); // Hold trigger for 500ms
+    digitalWrite(INTREX_TRIGGER_PIN, LOW);
+
+    // Rotate the jar for labeling
+    rotateJar(2000, 1000); // Adjust steps and speed to match labeling speed
+
+    // Lower the jar back
+    moveLinearStepper(false, 1000, 800);
+
+    // Release gripper
+    controlGripper(true);
+
+    // Turn off steppers
+    digitalWrite(RELAY_ROTATION_STEPPER_PIN, LOW);
+    digitalWrite(RELAY_LINEAR_STEPPER_PIN, LOW);
+  }
+}
