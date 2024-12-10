@@ -41,7 +41,7 @@ The primary components of the project include:
    - Wire the sensor and stepper motors to the Arduino, ensuring secure connections for power and signal.
 
 2. **Software Setup**:
-   - Load the provided Python and Arduino code onto the Raspberry Pi and Arduino, respectively.
+   - Load the provided C++ and Arduino code onto the Raspberry Pi and Arduino, respectively.
    - Install required libraries on the Raspberry Pi (`RPi.GPIO` for GPIO control).
 
 3. **Calibration**:
@@ -56,9 +56,9 @@ The primary components of the project include:
 
 ## Code Explanation
 
-### Python Code
+### C++ Code
 
-The Python code, running on a Raspberry Pi, handles the main sequence:
+The C++ code, running on a Raspberry Pi, handles the main sequence:
 - **Jar Detection**: When a jar is detected, the process initiates.
 - **Actuator Control**: The linear actuator lowers the gripper and adjusts height.
 - **Rotation Control**: The jar is rotated by the stepper motor in sync with the INTREX speed.
