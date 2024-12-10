@@ -1,0 +1,147 @@
+// Pin Definitions
+#define RELAY_ROTATION_STEPPER_PIN 2  // Power for rotation stepper (LOW to activate)
+#define RELAY_LINEAR_STEPPER_PIN 3   // Power for linear stepper (LOW to activate)
+#define RELAY_VALVE_CLOSE_PIN 4      // Close pneumatic gripper (LOW to activate)
+#define RELAY_VALVE_OPEN_PIN 5       // Open pneumatic gripper (LOW to activate)
+#define STEP_PIN_ROTATION 6          // Rotation Stepper Step Pin
+#define DIR_PIN_ROTATION 7           // Rotation Stepper Direction Pin
+#define STEP_PIN_LINEAR 8            // Linear Stepper Step Pin
+#define DIR_PIN_LINEAR 9             // Linear Stepper Direction Pin
+#define EMERGENCY_OFF_PIN 10         // Emergency Off trigger
+#define JAR_DETECTION_PIN 11         // Input for jar detection
+#define INTREX_TRIGGER_PIN 12        // Output to trigger INTREX machine
+
+// Constants
+#define STEPS_PER_ROTATION 200       // Steps for full rotation (adjust based on motor specs)
+#define LINEAR_STEPS_PER_MM 5        // Steps per mm for linear movement
+#define ROTATION_DELAY 200           // Microsecond delay between steps for rotation
+#define LINEAR_DELAY 500             // Microsecond delay between steps for linear motion
+
+void setup() {
+  // Initialize Serial Monitor
+  Serial.begin(9600);
+  Serial.println("System Initializing...");
+
+  // Pin Modes
+  pinMode(RELAY_ROTATION_STEPPER_PIN, OUTPUT);
+  pinMode(RELAY_LINEAR_STEPPER_PIN, OUTPUT);
+  pinMode(RELAY_VALVE_CLOSE_PIN, OUTPUT);
+  pinMode(RELAY_VALVE_OPEN_PIN, OUTPUT);
+  pinMode(STEP_PIN_ROTATION, OUTPUT);
+  pinMode(DIR_PIN_ROTATION, OUTPUT);
+  pinMode(STEP_PIN_LINEAR, OUTPUT);
+  pinMode(DIR_PIN_LINEAR, OUTPUT);
+  pinMode(EMERGENCY_OFF_PIN, INPUT_PULLUP);
+  pinMode(JAR_DETECTION_PIN, INPUT_PULLUP);
+  pinMode(INTREX_TRIGGER_PIN, OUTPUT);
+
+  // Initial States
+  digitalWrite(RELAY_ROTATION_STEPPER_PIN, HIGH); // Keep off initially
+  digitalWrite(RELAY_LINEAR_STEPPER_PIN, HIGH);
+  digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH);
+  digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH);
+  digitalWrite(INTREX_TRIGGER_PIN, LOW);
+
+  Serial.println("Initialization Complete.");
+}
+
+void loop() {
+  if (digitalRead(EMERGENCY_OFF_PIN) == LOW) {
+    emergencyStop();
+    return;
+  }
+
+  if (digitalRead(JAR_DETECTION_PIN) == LOW) {
+    Serial.println("Jar detected. Starting process...");
+    executeLabelingCycle();
+  }
+}
+
+void executeLabelingCycle() {
+  // Activate linear stepper relay
+  digitalWrite(RELAY_LINEAR_STEPPER_PIN, LOW);
+  Serial.println("Linear stepper powered on.");
+
+  // Move linear stepper down to jar
+  moveLinearStepper(-100); // Adjust steps as necessary
+  Serial.println("Linear stepper moved down.");
+
+  // Activate gripper
+  closeGripper();
+
+  // Move linear stepper up to INTREX height
+  moveLinearStepper(200); // Adjust steps for INTREX position
+  Serial.println("Linear stepper moved up.");
+
+  // Trigger INTREX for sticker
+  triggerIntrex();
+  Serial.println("INTREX triggered for sticker application.");
+
+  // Rotate jar for sticker application
+  digitalWrite(RELAY_ROTATION_STEPPER_PIN, LOW);
+  rotateStepper(STEPS_PER_ROTATION * 2); // Adjust rotations as needed
+  digitalWrite(RELAY_ROTATION_STEPPER_PIN, HIGH);
+  Serial.println("Jar rotated for sticker application.");
+
+  // Move linear stepper back down
+  moveLinearStepper(-200);
+  Serial.println("Linear stepper moved back down.");
+
+  // Release gripper
+  openGripper();
+  Serial.println("Gripper released.");
+
+  // Turn off linear stepper relay
+  digitalWrite(RELAY_LINEAR_STEPPER_PIN, HIGH);
+  Serial.println("Linear stepper powered off.");
+}
+
+void moveLinearStepper(int steps) {
+  digitalWrite(DIR_PIN_LINEAR, steps > 0 ? HIGH : LOW);
+  steps = abs(steps);
+  for (int i = 0; i < steps; i++) {
+    digitalWrite(STEP_PIN_LINEAR, HIGH);
+    delayMicroseconds(LINEAR_DELAY);
+    digitalWrite(STEP_PIN_LINEAR, LOW);
+    delayMicroseconds(LINEAR_DELAY);
+  }
+}
+
+void rotateStepper(int steps) {
+  digitalWrite(DIR_PIN_ROTATION, HIGH); // Adjust direction as necessary
+  for (int i = 0; i < steps; i++) {
+    digitalWrite(STEP_PIN_ROTATION, HIGH);
+    delayMicroseconds(ROTATION_DELAY);
+    digitalWrite(STEP_PIN_ROTATION, LOW);
+    delayMicroseconds(ROTATION_DELAY);
+  }
+}
+
+void closeGripper() {
+  digitalWrite(RELAY_VALVE_CLOSE_PIN, LOW);
+  digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH);
+  delay(500); // Allow time for gripper to close
+}
+
+void openGripper() {
+  digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH);
+  digitalWrite(RELAY_VALVE_OPEN_PIN, LOW);
+  delay(500); // Allow time for gripper to open
+}
+
+void triggerIntrex() {
+  digitalWrite(INTREX_TRIGGER_PIN, HIGH); // Signal INTREX
+  delay(500); // Duration of trigger pulse
+  digitalWrite(INTREX_TRIGGER_PIN, LOW); // Reset signal
+}
+
+void emergencyStop() {
+  Serial.println("EMERGENCY STOP ACTIVATED!");
+  digitalWrite(RELAY_ROTATION_STEPPER_PIN, HIGH);
+  digitalWrite(RELAY_LINEAR_STEPPER_PIN, HIGH);
+  digitalWrite(RELAY_VALVE_CLOSE_PIN, HIGH);
+  digitalWrite(RELAY_VALVE_OPEN_PIN, HIGH);
+  while (true) {
+    // Stay here until reset
+  }
+}
